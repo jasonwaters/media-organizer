@@ -5,6 +5,8 @@ __pycache__/
 # C extensions
 *.so
 
+local_settings.py
+
 # IntelliJ
 .idea/
 
