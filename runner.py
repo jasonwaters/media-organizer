@@ -137,8 +137,9 @@ class MediaCowboy(object):
         unmark_directory = False
 
         for filename in dir_listing:
-            if self.is_valid_video_file(filename):
-                file_path = os.path.join(directory, filename)
+            file_path = os.path.join(directory, filename)
+
+            if self.is_valid_video_file(file_path):
                 file_size = os.path.getsize(file_path)
                 if file_size > self.VIDEO_FILE_SIZE_MINIMUM:
                     log("Moving %s..." % filename)
