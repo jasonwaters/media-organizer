@@ -23,11 +23,47 @@ def log(message):
     print "%s (%s)\n" % (message, now.strftime("%Y-%m-%d %H:%M:%S"))
 
 
-class Organizer(object):
+def remove_finished_torrents():
+    try:
+        client = transmissionrpc.Client(address=TRANSMISSION_HOST, port=TRANSMISSION_PORT,
+                                        user=TRANSMISSION_USER, password=TRANSMISSION_PASSWORD)
+
+        torrents = client.get_torrents()
+
+        for torrent in torrents:
+            if torrent.progress == 100:
+                log("Removed '%s'." % torrent.name)
+                client.remove_torrent(torrent.hashString, delete_data=False)
+
+    except TransmissionError as error:
+        log("Unable to connect to Transmission.")
+        log(error)
+
+
+def mark_directory(directory, mark_file_name, create_file=True):
+    mark_file = os.path.join(directory, mark_file_name)
+    if create_file:
+        f = open(mark_file, 'w')
+        f.close()
+    else:
+        if os.path.isfile(mark_file):
+            os.remove(mark_file)
+
+
+def trash_folder(directory):
+    if directory is not DOWNLOAD_FOLDER:
+        log("Deleting Folder... [ %s ] " % directory)
+        shutil.move(directory, TRASH_FOLDER)
+
+
+class MediaCowboy(object):
     def __init__(self):
         self.PATTERN_EPISODE = re.compile(".*((([sS]\d{1,2}[eE]\d{1,2})|(\d+x\d+))|(\.\d{3}\.)).*")
         self.PATTERN_VIDEO = re.compile("(^.+\.(avi|mp4|mkv)$)")
+        self.PATTERN_TORRENT_PART = re.compile("(^.+\.(part)$)")
         self.PATTERN_RAR = re.compile("^.+\.(rar|r\d+)$")
+
+        self.VIDEO_FILE_SIZE_MINIMUM = 10000000  # 10MB
 
         self.extensions_unrar = ['.rar', '.r01']  # List of extensions for auto-extract to look for
         self.supported_filetypes = []
@@ -36,9 +72,6 @@ class Organizer(object):
         self.unrar_name = 'unrar'
         self.unrar_executable = None
         self.unrar_check()
-
-        # Check that the download directory parameters is actually a directory
-        self.remove_finished_torrents()  # from transmission
 
         self.traverse_directories()
 
@@ -101,18 +134,27 @@ class Organizer(object):
 
     def scan_for_videos(self, directory):
         dir_listing = os.listdir(directory)
+        unmark_directory = False
 
         for filename in dir_listing:
             if self.is_valid_video_file(filename):
                 file_path = os.path.join(directory, filename)
-                log("Moving %s..." % filename)
-                if self.is_tv_episode(filename):
-                    shutil.move(file_path, TV_FOLDER)
-                else:
-                    shutil.move(file_path, MOVIE_FOLDER)
+                file_size = os.path.getsize(file_path)
+                if file_size > self.VIDEO_FILE_SIZE_MINIMUM:
+                    log("Moving %s..." % filename)
+                    if self.is_tv_episode(filename):
+                        shutil.move(file_path, TV_FOLDER)
+                    else:
+                        shutil.move(file_path, MOVIE_FOLDER)
 
-                self.mark_directory(directory, FlagFile.REMOVE_FOLDER)
-                log("Moved '%s'." % filename)
+                    mark_directory(directory, FlagFile.REMOVE_FOLDER)
+                    log("Moved.")
+
+            if self.is_torrent_part(filename):
+                unmark_directory = True
+
+        if unmark_directory:
+            mark_directory(directory, FlagFile.REMOVE_FOLDER, False)
 
     def clean_up(self, directory):
         unrared = os.path.exists(os.path.join(directory, FlagFile.UNRARED))
@@ -122,7 +164,7 @@ class Organizer(object):
             self.delete_rars(directory)
 
         if remove_folder:
-            self.trash_folder(directory)
+            trash_folder(directory)
 
     def delete_rars(self, directory):
         if directory is not DOWNLOAD_FOLDER:
@@ -134,13 +176,7 @@ class Organizer(object):
                     log("deleted %s" % filename)
                     os.remove(os.path.join(directory, filename))
 
-    def trash_folder(self, directory):
-        if directory is not DOWNLOAD_FOLDER:
-            log("Deleting Folder...")
-            shutil.move(directory, TRASH_FOLDER)
-
     '''Extract a rar archive'''
-
     def start_unrar(self, directory, archive_name):
         # Create command line arguments for rar extractions
         cmd_args = ['', '', '', '', '']
@@ -157,16 +193,8 @@ class Organizer(object):
             exit()
 
         # Sucessfully extracted archive, mark the dir with a hidden file
-        self.mark_directory(directory, FlagFile.UNRARED)
+        mark_directory(directory, FlagFile.UNRARED)
         self.delete_rars(directory)
-
-    '''Creates a hidden file so the same archives will not be extracted again'''
-
-    def mark_directory(self, directory, mark_file_name):
-        mark_file = os.path.join(directory, mark_file_name)
-        f = open(mark_file, 'w')
-        f.close()
-        log(mark_file_name + ' file created')
 
     def is_rar(self, name):
         return self.PATTERN_RAR.match(name.lower()) is not None
@@ -177,22 +205,10 @@ class Organizer(object):
     def is_valid_video_file(self, name):
         return self.PATTERN_VIDEO.match(name.lower()) is not None and name.lower().find('sample') == -1
 
-    def remove_finished_torrents(self):
-        try:
-            client = transmissionrpc.Client(address=TRANSMISSION_HOST, port=TRANSMISSION_PORT,
-                                            user=TRANSMISSION_USER, password=TRANSMISSION_PASSWORD)
-
-            torrents = client.get_torrents()
-
-            for tid, torrent in torrents.iteritems():
-                if torrent.progress == 100:
-                    log("Removed '%s'." % torrent.name)
-                    client.remove_torrent(torrent.hashString, delete_data=False)
-
-        except TransmissionError as error:
-            log("Unable to connect to Transmission.")
-            log(error)
+    def is_torrent_part(self, name):
+        return self.PATTERN_TORRENT_PART.match(name.lower()) is not None
 
 
 if __name__ == '__main__':
-    obj = Organizer()
+    remove_finished_torrents()
+    woody = MediaCowboy()

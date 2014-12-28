@@ -1,11 +1,11 @@
-media-organizer
+Media Cowboy
 ===============
 
 ###### Tested on OS X, but should work anywhere python 2.7 is installed.
 
 ## What is It?
 
-Python Script that:
+A python script that:
 
 * Removes completed torrents from Transmission.
 * Scans a download folder for archives and video files.
