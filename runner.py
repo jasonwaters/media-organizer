@@ -58,7 +58,7 @@ def trash_folder(directory):
 
 class MediaCowboy(object):
     def __init__(self):
-        self.PATTERN_EPISODE = re.compile(".*((([sS]\d{1,2}[eE]\d{1,2})|(\d+x\d+))|(\.\d{3}\.)).*")
+        self.PATTERN_EPISODE = re.compile(".*((([sS]\d{1,2}[eE]\d{1,2})|(\d+x\d+))|(\.\d{3}\.)|(\d{4}\.\d{2}\.\d{2})).*")
         self.PATTERN_VIDEO = re.compile("(^.+\.(avi|mp4|mkv)$)")
         self.PATTERN_TORRENT_PART = re.compile("(^.+\.(part)$)")
         self.PATTERN_RAR = re.compile("^.+\.(rar|r\d+)$")
