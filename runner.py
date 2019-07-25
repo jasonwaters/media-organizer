@@ -1,13 +1,15 @@
 #!/usr/bin/env python
+import json
 import shutil
 import datetime
 
 from local_settings import DOWNLOAD_FOLDER, TRANSMISSION_HOST, TRANSMISSION_USER, TRANSMISSION_PORT, \
-    TRANSMISSION_PASSWORD, MOVIE_FOLDER, TV_FOLDER, TRASH_FOLDER
+    TRANSMISSION_PASSWORD, MOVIE_FOLDER, TV_FOLDER, TRASH_FOLDER, SONARR_TV_FOLDER, SONARR_API_URL, SONARR_API_KEY
 import os
 import re
 import transmissionrpc
 from transmissionrpc.error import TransmissionError
+import requests
 
 
 class FlagFile:
@@ -38,6 +40,25 @@ def remove_finished_torrents():
     except TransmissionError as error:
         log("Unable to connect to Transmission.")
         log(error)
+
+
+def scan_and_move_complete_tv_episodes():
+    headers = {
+        "X-Api-Key": SONARR_API_KEY
+    }
+
+    dir_listing = os.listdir(TV_FOLDER)
+
+    for filename in dir_listing:
+        if not filename.startswith('.'):
+            path = SONARR_TV_FOLDER + filename
+            payload = {
+                'name': 'downloadedepisodesscan',
+                'path': path,
+                'importMode': 'Move'
+            }
+            r = requests.post(SONARR_API_URL + '/command', headers=headers, data=json.dumps(payload))
+            log(r.status_code)
 
 
 def mark_directory(directory, mark_file_name, create_file=True):
@@ -213,3 +234,4 @@ class MediaCowboy(object):
 if __name__ == '__main__':
     remove_finished_torrents()
     woody = MediaCowboy()
+    scan_and_move_complete_tv_episodes()
