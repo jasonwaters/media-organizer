@@ -50,7 +50,7 @@ def scan_and_move_complete_tv_episodes():
     dir_listing = os.listdir(TV_FOLDER)
 
     for filename in dir_listing:
-        if not filename.startswith('.'):
+        if not filename.startswith('.') and not filename.startswith('@'):
             path = SONARR_TV_FOLDER + filename
             payload = {
                 'name': 'downloadedepisodesscan',
@@ -58,7 +58,7 @@ def scan_and_move_complete_tv_episodes():
                 'importMode': 'Move'
             }
             r = requests.post(SONARR_API_URL + '/command', headers=headers, data=json.dumps(payload))
-            log(r.status_code)
+            log("Asking Sonarr to rename... [ %s, %s ] " % (path, r.status_code))
 
 
 def mark_directory(directory, mark_file_name, create_file=True):
