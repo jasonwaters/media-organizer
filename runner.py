@@ -44,6 +44,8 @@ def remove_finished_torrents():
 
 def scan_and_move_complete_tv_episodes():
     headers = {
+        "accept": "application/json",
+        "Content-Type": "application/json",
         "X-Api-Key": SONARR_API_KEY
     }
 
