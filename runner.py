@@ -2,6 +2,7 @@
 import json
 import shutil
 import datetime
+from time import sleep
 
 from local_settings import DOWNLOAD_FOLDER, TRANSMISSION_HOST, TRANSMISSION_USER, TRANSMISSION_PORT, \
     TRANSMISSION_PASSWORD, MOVIE_FOLDER, TV_FOLDER, TRASH_FOLDER, SONARR_TV_FOLDER, SONARR_API_URL, SONARR_API_KEY
@@ -61,6 +62,7 @@ def scan_and_move_complete_tv_episodes():
             }
             r = requests.post(SONARR_API_URL + '/command', headers=headers, data=json.dumps(payload))
             log("Asking Sonarr to rename... [ %s, %s ] " % (path, r.status_code))
+            sleep(5)
 
 
 def mark_directory(directory, mark_file_name, create_file=True):
