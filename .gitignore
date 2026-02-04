@@ -5,7 +5,8 @@ __pycache__/
 # C extensions
 *.so
 
-local_settings.py
+# Local development overrides (optional)
+local_settings_local.py
 
 # IntelliJ
 .idea/

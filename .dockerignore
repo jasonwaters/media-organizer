@@ -1,0 +1,41 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+.Python
+env/
+venv/
+.venv/
+
+# Local development
+local_settings.py
+
+# Documentation
+README.md
+LICENSE
+
+# CI/CD
+.github/
+
+# Testing
+.coverage
+.tox/
+htmlcov/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+@eaDir/
