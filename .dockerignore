@@ -19,8 +19,8 @@ env/
 venv/
 .venv/
 
-# Local development
-local_settings.py
+# Local development overrides only
+local_settings_local.py
 
 # Documentation
 README.md
