@@ -1,0 +1,9 @@
+name: media-organizer
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - unrar
+  - pip:
+      - -e .[dev]

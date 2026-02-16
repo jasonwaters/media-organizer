@@ -1,36 +1,21 @@
+"""Backward-compatible settings module.
+
+Prefer environment variables and `media_organizer.config.Settings`.
+This module remains for users with existing local workflows.
 """
-Configuration loaded from environment variables with sensible defaults.
+from media_organizer.config import Settings
 
-DOCKER USAGE:
-  Set environment variables in docker-compose.yml (see README for examples)
+_settings = Settings.from_env()
 
-LOCAL DEVELOPMENT:
-  Option 1: Set environment variables in your shell
-    export DOWNLOAD_FOLDER=/path/to/downloads
-    export TV_FOLDER=/path/to/tv
-    python runner.py
-
-  Option 2: Temporarily modify this file with hardcoded values
-    (Just don't commit your changes)
-
-  Option 3: Create local_settings_local.py and modify runner.py import
-    (For persistent local config without affecting this file)
-"""
-import os
-
-# Folder paths - adjust based on your mount point
-DOWNLOAD_FOLDER = os.getenv('DOWNLOAD_FOLDER', '/media/downloads')
-TV_FOLDER = os.getenv('TV_FOLDER', '/media/tv')
-MOVIE_FOLDER = os.getenv('MOVIE_FOLDER', '/media/movies')
-TRASH_FOLDER = os.getenv('TRASH_FOLDER', '/media/trash')
-
-# Sonarr configuration
-SONARR_API_URL = os.getenv('SONARR_API_URL', 'http://localhost:8989/api/v3')
-SONARR_API_KEY = os.getenv('SONARR_API_KEY', '')
-SONARR_TV_FOLDER = os.getenv('SONARR_TV_FOLDER', '/media/tv/')  # May differ from TV_FOLDER if Sonarr is in Docker
-
-# Transmission configuration
-TRANSMISSION_HOST = os.getenv('TRANSMISSION_HOST', 'localhost')
-TRANSMISSION_PORT = int(os.getenv('TRANSMISSION_PORT', '9091'))
-TRANSMISSION_USER = os.getenv('TRANSMISSION_USER', '')
-TRANSMISSION_PASSWORD = os.getenv('TRANSMISSION_PASSWORD', '')
+DOWNLOAD_FOLDER = str(_settings.download_folder)
+TV_FOLDER = str(_settings.tv_folder)
+MOVIE_FOLDER = str(_settings.movie_folder)
+TRASH_FOLDER = str(_settings.trash_folder)
+SONARR_API_URL = _settings.sonarr_api_url
+SONARR_API_KEY = _settings.sonarr_api_key
+SONARR_TV_FOLDER = _settings.sonarr_tv_folder
+SONARR_COMMAND_DELAY_SECONDS = _settings.sonarr_command_delay_seconds
+TRANSMISSION_HOST = _settings.transmission_host
+TRANSMISSION_PORT = _settings.transmission_port
+TRANSMISSION_USER = _settings.transmission_user
+TRANSMISSION_PASSWORD = _settings.transmission_password

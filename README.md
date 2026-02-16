@@ -1,80 +1,105 @@
-Media Cowboy
+Media Organizer
 ===============
 
-###### Tested on OS X, but should work anywhere python 2.7 is installed.
+Python 3 media post-processing script for Transmission + Sonarr workflows.
 
-## What is It?
+## What It Does
 
-A python script that:
+On each run, it:
 
-* Removes completed torrents from Transmission.
-* Scans a download folder for archives and video files.
-  * Extracts archives
-  * Moves archive files to Trash
-  * Moves video files to a TV or Movies folder depending on filename.
-  * Moves folders to Trash if a video file was moved.
+- Removes completed torrents from Transmission (without deleting data)
+- Scans a download folder recursively
+- Extracts RAR archives
+- Moves video files to TV or Movie folders based on filename patterns
+- Cleans up processed folders into a trash folder
+- Calls Sonarr to import/rename newly moved TV episodes
 
-## Local Development
+## Requirements
 
-1. Clone the repo
-   ```bash
-   git clone https://github.com/jasonwaters/media-organizer.git
-   cd media-organizer
-   ```
+- Python 3.10+ (tested with 3.12)
+- `unrar` binary available on `PATH`
+- Transmission RPC access (optional but expected for torrent cleanup)
+- Sonarr API access (optional but expected for TV import/rename)
 
-2. Create a virtual environment
-   ```bash
-   virtualenv --no-site-packages env
-   source env/bin/activate
-   ```
+## Local Development with Conda (Recommended)
 
-3. Install dependencies
-   ```bash
-   pip install -r requirements.pip
-   ```
+1. Create and activate the environment:
 
-4. Configure (choose one):
-   
-   **Option A: Environment variables (recommended)**
-   ```bash
-   export DOWNLOAD_FOLDER=/path/to/downloads
-   export TV_FOLDER=/path/to/tv
-   export MOVIE_FOLDER=/path/to/movies
-   export TRASH_FOLDER=/path/to/trash
-   # ... set other vars as needed
-   ```
-   
-   **Option B: Modify `local_settings.py` temporarily**
-   ```python
-   # Edit local_settings.py and hardcode values
-   DOWNLOAD_FOLDER = "/Users/you/Downloads"
-   # (just don't commit changes)
-   ```
+```bash
+conda env create -f environment.yml
+conda activate media-organizer
+```
 
-5. Run it
-   ```bash
-   ./runner.py
-   ```
+This installs the project in editable mode with dev dependencies.
 
-6. Schedule with cron (optional)
-   ```bash
-   # Add to crontab
-   */30 * * * * /path/to/env/bin/python /path/to/runner.py
-   ```
+2. Configure environment variables:
 
+```bash
+export DOWNLOAD_FOLDER=/path/to/downloads
+export TV_FOLDER=/path/to/tv
+export MOVIE_FOLDER=/path/to/movies
+export TRASH_FOLDER=/path/to/trash
+
+export SONARR_API_URL=http://localhost:8989/api/v3
+export SONARR_API_KEY=your_key
+export SONARR_TV_FOLDER=/path/that/sonarr/sees/tv/
+export SONARR_COMMAND_DELAY_SECONDS=0
+
+export TRANSMISSION_HOST=localhost
+export TRANSMISSION_PORT=9091
+export TRANSMISSION_USER=your_user
+export TRANSMISSION_PASSWORD=your_password
+```
+
+3. Run the organizer:
+
+```bash
+python runner.py
+```
+
+4. Run tests:
+
+```bash
+pytest
+```
+
+## Configuration
+
+All runtime configuration is loaded from environment variables.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DOWNLOAD_FOLDER` | Yes | `/media/downloads` | Folder to scan for downloads |
+| `TV_FOLDER` | Yes | `/media/tv` | Destination for TV episodes |
+| `MOVIE_FOLDER` | Yes | `/media/movies` | Destination for movie files |
+| `TRASH_FOLDER` | Yes | `/media/trash` | Destination for cleaned-up folders |
+| `SONARR_API_URL` | No | `http://localhost:8989/api/v3` | Sonarr API base URL |
+| `SONARR_API_KEY` | No | `""` | Sonarr API key |
+| `SONARR_TV_FOLDER` | No | `/media/tv/` | TV path from Sonarr's perspective |
+| `SONARR_COMMAND_DELAY_SECONDS` | No | `0` | Delay between Sonarr command posts |
+| `TRANSMISSION_HOST` | No | `localhost` | Transmission hostname |
+| `TRANSMISSION_PORT` | No | `9091` | Transmission RPC port |
+| `TRANSMISSION_USER` | No | `""` | Transmission username |
+| `TRANSMISSION_PASSWORD` | No | `""` | Transmission password |
+
+## Scheduling
+
+Example cron entry (every 30 minutes):
+
+```bash
+*/30 * * * * /path/to/conda/envs/media-organizer/bin/python /path/to/media-organizer/runner.py
+```
 
 ## Docker
 
-### Quick Start with Docker Compose (Recommended)
-
-Add to your existing `docker-compose.yml`:
+Example `docker-compose.yml` service:
 
 ```yaml
 services:
   media-organizer:
     image: ghcr.io/jasonwaters/media-organizer:latest
     volumes:
-      - /volume1/media:/media  # Adjust to your media folder
+      - /volume1/media:/media
     environment:
       DOWNLOAD_FOLDER: /media/downloads
       TV_FOLDER: /media/tv
@@ -83,72 +108,24 @@ services:
       SONARR_API_URL: http://sonarr:8989/api/v3
       SONARR_API_KEY: your_api_key_here
       SONARR_TV_FOLDER: /media/tv/
+      SONARR_COMMAND_DELAY_SECONDS: 5
       TRANSMISSION_HOST: transmission
       TRANSMISSION_PORT: 9091
       TRANSMISSION_USER: your_user
       TRANSMISSION_PASSWORD: your_password
     restart: "no"
-    profiles: ["manual"]  # Exclude from 'docker-compose up'
 ```
 
-**Run on schedule or manually:**
+Run manually:
 
 ```bash
-# From any directory
-docker-compose -f /path/to/docker-compose.yml run --rm media-organizer
-
-# Or if in the same directory
 docker-compose run --rm media-organizer
 ```
 
-### Automated Image Publishing
+## Project Layout
 
-Docker images are automatically built and published to GitHub Container Registry on every push via GitHub Actions. Images support both `linux/amd64` and `linux/arm64` architectures.
-
-**Available tags:**
-- `latest` - Latest build from main branch
-- `main` - Latest main branch
-- `v1.0.0` - Specific version tags
-- `main-abc1234` - Specific commit
-
-### Manual Build (Development)
-
-```bash
-# Clone repo
-git clone https://github.com/jasonwaters/media-organizer.git
-cd media-organizer
-
-# Build image
-docker build -t media-organizer .
-
-# Run with environment variables
-docker run --rm \
-  -v /volume1/media:/media \
-  -e DOWNLOAD_FOLDER=/media/downloads \
-  -e TV_FOLDER=/media/tv \
-  -e MOVIE_FOLDER=/media/movies \
-  -e TRASH_FOLDER=/media/trash \
-  -e TRANSMISSION_HOST=192.168.1.100 \
-  -e TRANSMISSION_PORT=9091 \
-  media-organizer
-```
-
-### Configuration Options
-
-All configuration is done via environment variables:
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DOWNLOAD_FOLDER` | Yes | `/media/downloads` | Folder to scan for downloads |
-| `TV_FOLDER` | Yes | `/media/tv` | Destination for TV episodes |
-| `MOVIE_FOLDER` | Yes | `/media/movies` | Destination for movies |
-| `TRASH_FOLDER` | Yes | `/media/trash` | Folder for deleted items |
-| `SONARR_API_URL` | No | `http://localhost:8989/api/v3` | Sonarr API endpoint |
-| `SONARR_API_KEY` | No | `""` | Sonarr API key |
-| `SONARR_TV_FOLDER` | No | `/media/tv/` | TV folder path from Sonarr's perspective |
-| `TRANSMISSION_HOST` | No | `localhost` | Transmission hostname/IP |
-| `TRANSMISSION_PORT` | No | `9091` | Transmission port |
-| `TRANSMISSION_USER` | No | `""` | Transmission username |
-| `TRANSMISSION_PASSWORD` | No | `""` | Transmission password |
-
-Set these directly in your `docker-compose.yml` environment section (see examples above).
+- `runner.py`: compatibility entrypoint
+- `media_organizer/config.py`: typed environment settings
+- `media_organizer/app.py`: core services and orchestration
+- `media_organizer/cli.py`: app wiring and startup
+- `tests/`: pytest unit tests
