@@ -8,6 +8,14 @@ class FakeTransmissionService:
         return None
 
 
+class FakeFileOrganizer:
+    def __init__(self, settings):
+        self.settings = settings
+
+    def process_downloads(self):
+        return None
+
+
 class FakeHttpClient:
     def post(self, url: str, *, headers: dict, json: dict, timeout: int):
         return None
@@ -15,6 +23,7 @@ class FakeHttpClient:
 
 def test_build_app_uses_injected_http_client(settings, monkeypatch):
     monkeypatch.setattr(cli, "_build_transmission_service", lambda _settings: FakeTransmissionService())
+    monkeypatch.setattr(cli, "FileOrganizer", FakeFileOrganizer)
     injected = FakeHttpClient()
 
     app = cli.build_app(settings=settings, http_client=injected)
@@ -24,6 +33,7 @@ def test_build_app_uses_injected_http_client(settings, monkeypatch):
 
 def test_build_app_creates_session_by_default(settings, monkeypatch):
     monkeypatch.setattr(cli, "_build_transmission_service", lambda _settings: FakeTransmissionService())
+    monkeypatch.setattr(cli, "FileOrganizer", FakeFileOrganizer)
 
     app = cli.build_app(settings=settings)
 
