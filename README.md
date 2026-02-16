@@ -17,7 +17,7 @@ On each run, it:
 ## Requirements
 
 - Python 3.10+ (tested with 3.12)
-- `unrar` binary available on `PATH`
+- `unrar` binary available on `PATH` (Docker image installs official `unrar`)
 - Transmission RPC access (optional but expected for torrent cleanup)
 - Sonarr API access (optional but expected for TV import/rename)
 
