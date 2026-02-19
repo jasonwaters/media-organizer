@@ -7,6 +7,11 @@ from media_organizer.app import FileOrganizer, MediaOrganizer, SonarrService, Tr
 from media_organizer.config import Settings
 
 
+STOPPED = 0
+DOWNLOADING = 4
+SEEDING = 6
+
+
 @dataclass
 class TorrentWithBadProgress:
     name: str
@@ -15,6 +20,7 @@ class TorrentWithBadProgress:
     hash_string: str | None = None
     percent_done: object = None
     is_finished: bool = False
+    _status: int = SEEDING
 
 
 class FakeTransmissionClient:
@@ -57,8 +63,8 @@ class FlakyHttp:
 def test_transmission_ignores_non_numeric_progress_values():
     client = FakeTransmissionClient(
         [
-            TorrentWithBadProgress(name="bad", hashString="a", progress="not-a-number"),
-            TorrentWithBadProgress(name="good", hashString="b", progress=100),
+            TorrentWithBadProgress(name="bad", hashString="a", progress="not-a-number", _status=SEEDING),
+            TorrentWithBadProgress(name="good", hashString="b", progress=100, _status=SEEDING),
         ]
     )
     service = TransmissionService(client_factory=lambda: client, transmission_error_type=RuntimeError)
@@ -68,25 +74,26 @@ def test_transmission_ignores_non_numeric_progress_values():
     assert client.removed == [("b", False)]
 
 
-def test_transmission_respects_explicit_is_finished_flag():
+def test_transmission_requires_both_complete_progress_and_done_status():
     client = FakeTransmissionClient(
         [
-            TorrentWithBadProgress(name="done-via-flag", hashString="flag-id", is_finished=True),
-            TorrentWithBadProgress(name="not-done", hashString="other", is_finished=False, progress=1),
+            TorrentWithBadProgress(name="no-progress-info", hashString="flag-id", _status=SEEDING),
+            TorrentWithBadProgress(name="low-progress", hashString="other", progress=1, _status=SEEDING),
+            TorrentWithBadProgress(name="complete", hashString="done", progress=100, _status=SEEDING),
         ]
     )
     service = TransmissionService(client_factory=lambda: client, transmission_error_type=RuntimeError)
 
     service.remove_finished_torrents()
 
-    assert client.removed == [("flag-id", False)]
+    assert client.removed == [("done", False)]
 
 
 def test_transmission_skips_finished_torrent_without_id():
     client = FakeTransmissionClient(
         [
-            TorrentWithBadProgress(name="missing-id", progress=100),
-            TorrentWithBadProgress(name="normal", hashString="ok", progress=100),
+            TorrentWithBadProgress(name="missing-id", progress=100, _status=SEEDING),
+            TorrentWithBadProgress(name="normal", hashString="ok", progress=100, _status=SEEDING),
         ]
     )
     service = TransmissionService(client_factory=lambda: client, transmission_error_type=RuntimeError)

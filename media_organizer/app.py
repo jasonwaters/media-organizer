@@ -39,7 +39,6 @@ class TorrentInfo(Protocol):
     hash_string: str | None
     progress: float | None
     percent_done: float | None
-    is_finished: bool
 
 
 class TransmissionClient(Protocol):
@@ -109,11 +108,30 @@ class TransmissionService:
     def _get_torrent_id(torrent: object) -> str | None:
         return getattr(torrent, "hashString", None) or getattr(torrent, "hash_string", None)
 
+    # Transmission status codes where downloading/processing is still in progress
+    _INCOMPLETE_STATUSES = frozenset({
+        1,  # check pending
+        2,  # checking
+        3,  # download pending
+        4,  # downloading
+    })
+
     @staticmethod
     def _is_finished(torrent: object) -> bool:
-        if bool(getattr(torrent, "is_finished", False)):
-            return True
+        if TransmissionService._is_still_processing(torrent):
+            return False
 
+        return TransmissionService._is_download_complete(torrent)
+
+    @staticmethod
+    def _is_still_processing(torrent: object) -> bool:
+        status = getattr(torrent, "_status", None) if hasattr(torrent, "_status") else getattr(torrent, "status", None)
+        if isinstance(status, int):
+            return status in TransmissionService._INCOMPLETE_STATUSES
+        return False
+
+    @staticmethod
+    def _is_download_complete(torrent: object) -> bool:
         progress = TransmissionService._as_float(getattr(torrent, "progress", None))
         if progress is not None:
             return progress >= 100

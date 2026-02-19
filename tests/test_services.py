@@ -7,6 +7,13 @@ from media_organizer.app import SonarrService, TransmissionService
 from media_organizer.config import Settings
 
 
+STOPPED = 0
+CHECK_PENDING = 1
+DOWNLOADING = 4
+SEED_PENDING = 5
+SEEDING = 6
+
+
 @dataclass
 class Torrent:
     name: str
@@ -15,6 +22,7 @@ class Torrent:
     hash_string: str | None = None
     percent_done: float | None = None
     is_finished: bool = False
+    _status: int = SEEDING
 
 
 class FakeTransmissionClient:
@@ -52,11 +60,11 @@ class FailingRequestHttp:
         raise RequestException("network problem")
 
 
-def test_transmission_removes_only_complete_torrents():
+def test_transmission_removes_complete_torrents_past_download_phase():
     client = FakeTransmissionClient(
         torrents=[
-            Torrent(name="complete", hashString="aaa", progress=100),
-            Torrent(name="partial", hashString="bbb", progress=99.5),
+            Torrent(name="seeding", hashString="aaa", progress=100, _status=SEEDING),
+            Torrent(name="partial", hashString="bbb", progress=99.5, _status=DOWNLOADING),
         ]
     )
     service = TransmissionService(client_factory=lambda: client, transmission_error_type=RuntimeError)
@@ -66,11 +74,63 @@ def test_transmission_removes_only_complete_torrents():
     assert client.removed == [("aaa", False)]
 
 
+def test_transmission_removes_stopped_complete_torrents():
+    client = FakeTransmissionClient(
+        torrents=[
+            Torrent(name="stopped-done", hashString="aaa", progress=100, _status=STOPPED),
+        ]
+    )
+    service = TransmissionService(client_factory=lambda: client, transmission_error_type=RuntimeError)
+
+    service.remove_finished_torrents()
+
+    assert client.removed == [("aaa", False)]
+
+
+def test_transmission_removes_seed_pending_complete_torrents():
+    client = FakeTransmissionClient(
+        torrents=[
+            Torrent(name="seed-pending", hashString="aaa", progress=100, _status=SEED_PENDING),
+        ]
+    )
+    service = TransmissionService(client_factory=lambda: client, transmission_error_type=RuntimeError)
+
+    service.remove_finished_torrents()
+
+    assert client.removed == [("aaa", False)]
+
+
+def test_transmission_skips_100_percent_still_downloading():
+    client = FakeTransmissionClient(
+        torrents=[
+            Torrent(name="moving-files", hashString="aaa", progress=100, _status=DOWNLOADING),
+        ]
+    )
+    service = TransmissionService(client_factory=lambda: client, transmission_error_type=RuntimeError)
+
+    service.remove_finished_torrents()
+
+    assert client.removed == []
+
+
+def test_transmission_skips_100_percent_while_checking():
+    client = FakeTransmissionClient(
+        torrents=[
+            Torrent(name="verifying", hashString="aaa", progress=100, _status=CHECK_PENDING),
+        ]
+    )
+    service = TransmissionService(client_factory=lambda: client, transmission_error_type=RuntimeError)
+
+    service.remove_finished_torrents()
+
+    assert client.removed == []
+
+
 def test_transmission_supports_percent_done_and_hash_string():
     client = FakeTransmissionClient(
         torrents=[
-            Torrent(name="done", hash_string="ccc", percent_done=1.0),
-            Torrent(name="not_done", hash_string="ddd", percent_done=0.4),
+            Torrent(name="done", hash_string="ccc", percent_done=1.0, _status=SEEDING),
+            Torrent(name="not_done", hash_string="ddd", percent_done=0.4, _status=DOWNLOADING),
         ]
     )
     service = TransmissionService(client_factory=lambda: client, transmission_error_type=RuntimeError)
