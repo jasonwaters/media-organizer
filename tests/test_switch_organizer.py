@@ -312,8 +312,12 @@ class TestRaceConditionPrevention:
 
         from media_organizer.app import SonarrService
 
+        class DummyExtractor:
+            def extract(self, archive_path, destination):
+                pass
+
         transmission = FakeTransmissionService()
-        file_organizer = FileOrganizer(settings=settings)
+        file_organizer = FileOrganizer(settings=settings, extractor=DummyExtractor())
         sonarr = SonarrService(settings=settings, http_client=FakeHttp())
         switch_organizer = SwitchGameOrganizer(settings=settings)
 
