@@ -83,10 +83,11 @@ def _check_python_imports(errors: list[str]) -> None:
             errors.append(f"python package '{package_name}' not importable")
 
     try:
-        import nsz  # noqa: F401
+        from importlib.metadata import distribution
+        distribution("nsz")
         logger.info("OK: python package 'nsz'")
-    except ImportError:
-        logger.warning("WARN: python package 'nsz' not importable (optional)")
+    except Exception:
+        logger.warning("WARN: python package 'nsz' not installed (optional)")
 
 
 def _check_binary(name: str, *, required: bool, errors: list[str]) -> None:
