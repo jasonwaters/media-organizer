@@ -20,9 +20,20 @@ logger = logging.getLogger(__name__)
 SONARR_COMMAND_ENDPOINT = "/command"
 SONARR_COMMAND_TIMEOUT_SECONDS = 30
 
+_HIDDEN_PREFIXES = (".", "@")
+
+
+def _is_visible(name: str) -> bool:
+    return not any(name.startswith(prefix) for prefix in _HIDDEN_PREFIXES)
+
 
 class ArchiveExtractor(Protocol):
     def extract(self, archive_path: Path, destination: Path) -> None:
+        ...
+
+
+class SwitchDecompressor(Protocol):
+    def decompress(self, nsz_path: Path) -> Path | None:
         ...
 
 
@@ -126,9 +137,9 @@ class TransmissionService:
     @staticmethod
     def _is_still_processing(torrent: object) -> bool:
         status = getattr(torrent, "_status", None) if hasattr(torrent, "_status") else getattr(torrent, "status", None)
-        if isinstance(status, int):
-            return status in TransmissionService._INCOMPLETE_STATUSES
-        return False
+        if not isinstance(status, int):
+            return True
+        return status in TransmissionService._INCOMPLETE_STATUSES
 
     @staticmethod
     def _is_download_complete(torrent: object) -> bool:
@@ -179,10 +190,8 @@ class SonarrService:
 
     def _iter_visible_items(self) -> Iterable[Path]:
         for item in sorted(self.settings.tv_folder.iterdir()):
-            name = item.name
-            if name.startswith(".") or name.startswith("@"):
-                continue
-            yield item
+            if _is_visible(item.name):
+                yield item
 
     def _to_sonarr_path(self, name: str) -> str:
         return f"{self.settings.sonarr_tv_folder.rstrip('/')}/{name}"
@@ -365,13 +374,163 @@ class FileOrganizer:
         return cls.PATTERN_TORRENT_PART.match(name) is not None
 
 
+class NszDecompressor:
+    def __init__(self, binary_name: str = "nsz") -> None:
+        self.binary_name = binary_name
+        self.binary_path = shutil.which(binary_name)
+        if not self.binary_path:
+            raise RuntimeError(f"{binary_name} not found in PATH")
+
+    def decompress(self, nsz_path: Path) -> Path | None:
+        """Decompress a .nsz file to .nsp in the same directory.
+
+        Returns the path to the resulting .nsp file, or None on failure.
+        The source .nsz is removed only when decompression succeeds.
+        """
+        expected_output = nsz_path.with_suffix(".nsp")
+        if expected_output.exists():
+            nsz_path.unlink(missing_ok=True)
+            return expected_output
+
+        result = subprocess.run(
+            [self.binary_path, "-D", "--overwrite", str(nsz_path)],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            logger.warning("nsz decompress failed for %s: %s", nsz_path.name, result.stderr.strip())
+            return None
+
+        if expected_output.exists():
+            nsz_path.unlink(missing_ok=True)
+            return expected_output
+
+        return None
+
+
+class SwitchGameOrganizer:
+    SWITCH_EXTENSIONS = frozenset({".nsp", ".nsz", ".xci"})
+
+    def __init__(self, settings: Settings, decompressor: SwitchDecompressor | None = None) -> None:
+        self.settings = settings
+        self._decompressor = decompressor
+
+    def process_downloads(self) -> None:
+        if not self.settings.switch_folder:
+            return
+
+        if not self.settings.download_folder.exists():
+            return
+
+        self.settings.switch_folder.mkdir(parents=True, exist_ok=True)
+
+        for item in sorted(self.settings.download_folder.iterdir()):
+            if not _is_visible(item.name):
+                continue
+            self._process_item(item)
+
+    def _process_item(self, item: Path) -> None:
+        if item.is_file() and self._is_switch_file(item.name):
+            item = self._decompress_if_nsz(item)
+            self._move_file(item)
+        elif item.is_dir() and self._directory_contains_switch_files(item):
+            self._decompress_nsz_in_directory(item)
+            self._move_directory(item)
+
+    def _decompress_if_nsz(self, file: Path) -> Path:
+        if file.suffix.lower() != ".nsz" or not self._decompressor:
+            return file
+
+        logger.info("Decompressing %s", file.name)
+        result = self._decompressor.decompress(file)
+        if result:
+            logger.info("Decompressed %s -> %s", file.name, result.name)
+            return result
+
+        logger.warning("Failed to decompress %s, moving as-is", file.name)
+        return file
+
+    def _decompress_nsz_in_directory(self, directory: Path) -> None:
+        if not self._decompressor:
+            return
+
+        for item in sorted(directory.iterdir()):
+            if item.is_file() and item.suffix.lower() == ".nsz":
+                logger.info("Decompressing %s", item.name)
+                result = self._decompressor.decompress(item)
+                if result:
+                    logger.info("Decompressed %s -> %s", item.name, result.name)
+                else:
+                    logger.warning("Failed to decompress %s", item.name)
+
+    def _move_file(self, source: Path) -> None:
+        destination = self.settings.switch_folder / source.name
+        try:
+            logger.info("Moving switch file %s", source.name)
+            shutil.move(str(source), str(destination))
+            logger.info("Moved switch file %s", source.name)
+        except OSError:
+            logger.exception("Failed to move switch file: %s", source)
+
+    def _move_directory(self, source: Path) -> None:
+        destination = self.settings.switch_folder / source.name
+        try:
+            if destination.exists():
+                self._merge_directory(source, destination)
+            else:
+                logger.info("Moving switch folder %s", source.name)
+                shutil.move(str(source), str(destination))
+                logger.info("Moved switch folder %s", source.name)
+        except OSError:
+            logger.exception("Failed to move switch folder: %s", source)
+
+    def _merge_directory(self, source: Path, destination: Path) -> None:
+        logger.info("Merging switch folder %s into existing destination", source.name)
+        for item in source.iterdir():
+            target = destination / item.name
+            if item.is_dir() and target.is_dir():
+                self._merge_directory(item, target)
+            elif not target.exists() or (item.is_file() and item.stat().st_mtime > target.stat().st_mtime):
+                shutil.move(str(item), str(target))
+        self._remove_if_empty(source)
+        logger.info("Merged switch folder %s", source.name)
+
+    @staticmethod
+    def _remove_if_empty(directory: Path) -> None:
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
+
+    @classmethod
+    def _is_switch_file(cls, name: str) -> bool:
+        return Path(name).suffix.lower() in cls.SWITCH_EXTENSIONS
+
+    @classmethod
+    def _directory_contains_switch_files(cls, directory: Path) -> bool:
+        try:
+            return any(cls._is_switch_file(item.name) for item in directory.iterdir() if item.is_file())
+        except OSError:
+            return False
+
+
 class MediaOrganizer:
-    def __init__(self, transmission_service: TransmissionService, file_organizer: FileOrganizer, sonarr_service: SonarrService):
+    def __init__(
+        self,
+        transmission_service: TransmissionService,
+        file_organizer: FileOrganizer,
+        sonarr_service: SonarrService,
+        switch_organizer: SwitchGameOrganizer | None = None,
+    ):
         self.transmission_service = transmission_service
         self.file_organizer = file_organizer
         self.sonarr_service = sonarr_service
+        self.switch_organizer = switch_organizer
 
     def run(self) -> None:
         self.transmission_service.remove_finished_torrents()
+        if self.switch_organizer:
+            self.switch_organizer.process_downloads()
         self.file_organizer.process_downloads()
         self.sonarr_service.scan_and_move_complete_tv_episodes()

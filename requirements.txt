@@ -1,2 +1,3 @@
 requests>=2.31,<3.0
 transmission-rpc>=4.3,<5.0
+nsz>=4.6,<5.0

@@ -20,6 +20,7 @@ class Settings:
     transmission_password: str
     video_file_size_minimum: int = 10_000_000
     sonarr_command_delay_seconds: float = 0.0
+    switch_folder: Path | None = None
 
     def __post_init__(self) -> None:
         if self.transmission_port <= 0:
@@ -38,6 +39,7 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        switch_folder_raw = os.getenv("SWITCH_FOLDER", "")
         return cls(
             download_folder=Path(os.getenv("DOWNLOAD_FOLDER", "/media/downloads")).expanduser(),
             tv_folder=Path(os.getenv("TV_FOLDER", "/media/tv")).expanduser(),
@@ -51,6 +53,7 @@ class Settings:
             transmission_user=os.getenv("TRANSMISSION_USER", ""),
             transmission_password=os.getenv("TRANSMISSION_PASSWORD", ""),
             sonarr_command_delay_seconds=cls._parse_float_env("SONARR_COMMAND_DELAY_SECONDS", "0"),
+            switch_folder=Path(switch_folder_raw).expanduser() if switch_folder_raw else None,
         )
 
     @staticmethod

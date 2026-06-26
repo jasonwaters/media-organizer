@@ -8,6 +8,7 @@ Python 3 media post-processing script for Transmission + Sonarr workflows.
 On each run, it:
 
 - Removes completed torrents from Transmission (without deleting data)
+- Decompresses `.nsz` files to `.nsp` and moves Nintendo Switch game files to a dedicated folder (optional)
 - Scans a download folder recursively
 - Extracts RAR archives
 - Moves video files to TV or Movie folders based on filename patterns
@@ -81,6 +82,7 @@ All runtime configuration is loaded from environment variables.
 | `TRANSMISSION_PORT` | No | `9091` | Transmission RPC port |
 | `TRANSMISSION_USER` | No | `""` | Transmission username |
 | `TRANSMISSION_PASSWORD` | No | `""` | Transmission password |
+| `SWITCH_FOLDER` | No | `""` | Destination for Switch game files (disabled if empty) |
 
 ## Scheduling
 
@@ -100,26 +102,42 @@ services:
     image: ghcr.io/jasonwaters/media-organizer:latest
     volumes:
       - /volume1/media:/media
+      - /volume1/downloads:/downloads
+      - /volume1/docker/media-organizer/config:/config
     environment:
-      DOWNLOAD_FOLDER: /media/downloads
+      DOWNLOAD_FOLDER: /downloads/_complete
       TV_FOLDER: /media/tv
       MOVIE_FOLDER: /media/movies
-      TRASH_FOLDER: /media/trash
+      TRASH_FOLDER: /downloads/#recycle
       SONARR_API_URL: http://sonarr:8989/api/v3
       SONARR_API_KEY: your_api_key_here
       SONARR_TV_FOLDER: /media/tv/
       SONARR_COMMAND_DELAY_SECONDS: 5
       TRANSMISSION_HOST: transmission
       TRANSMISSION_PORT: 9091
-      TRANSMISSION_USER: your_user
-      TRANSMISSION_PASSWORD: your_password
+      TRANSMISSION_USER: ""
+      TRANSMISSION_PASSWORD: ""
+      SWITCH_FOLDER: /downloads/switch
     restart: "no"
 ```
+
+### Nintendo Switch Support
+
+To enable `.nsz` decompression, place your `prod.keys` or `keys.txt` file in the
+`/config` volume mount. The Docker image symlinks both filenames to the location
+where `nsz` expects them (`/root/.switch/`). Without keys, `.nsz` files are still
+moved to `SWITCH_FOLDER` but won't be decompressed.
 
 Run manually:
 
 ```bash
 docker-compose run --rm media-organizer
+```
+
+Verify container dependencies are installed correctly:
+
+```bash
+docker-compose run --rm media-organizer python runner.py --check
 ```
 
 ## Project Layout

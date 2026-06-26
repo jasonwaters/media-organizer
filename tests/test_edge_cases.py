@@ -60,6 +60,25 @@ class FlakyHttp:
         return Response()
 
 
+def test_transmission_skips_torrent_without_status_attribute():
+    @dataclass
+    class TorrentNoStatus:
+        name: str
+        hashString: str | None = None
+        progress: float | None = None
+        hash_string: str | None = None
+        percent_done: float | None = None
+
+    client = FakeTransmissionClient(
+        [TorrentNoStatus(name="mystery", hashString="xyz", progress=100)]
+    )
+    service = TransmissionService(client_factory=lambda: client, transmission_error_type=RuntimeError)
+
+    service.remove_finished_torrents()
+
+    assert client.removed == []
+
+
 def test_transmission_ignores_non_numeric_progress_values():
     client = FakeTransmissionClient(
         [

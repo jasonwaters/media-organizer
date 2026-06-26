@@ -69,7 +69,21 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Build Docker image (native platform for smoke test)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:smoke-test
+          cache-from: type=gha
+          provenance: false
+          sbom: false
+
+      - name: Smoke test container
+        run: docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:smoke-test python runner.py --check
+
       - name: Build and push Docker image
+        if: success()
         uses: docker/build-push-action@v5
         with:
           context: .
